@@ -1,12 +1,16 @@
 "use client";
 import { useState } from "react";
+
 import { ConnectWalletClient, ConnectPublicClient } from "./client";
+import { formatEther, getContract } from "viem";
+import { wagmi2612Abi } from "./abi_erc2612";
 
 export default function WalletButton() {
 
 	//State variable for address & balance
   const [address, setAddress] = useState<string | null>(null);
 	const [balance, setBalance] = useState<BigInt>(BigInt(0));
+  const [tokenBalance, setTokenBalance] = useState<BigInt>(BigInt(0));
 
 	// Requests connection and retrieves the address of wallet.
 	// Retrievies the balance of the address
@@ -24,9 +28,23 @@ export default function WalletButton() {
 			// Perform Public Action to retrieve address balance
 			const balance = await publicClient.getBalance({ address });
 
+
+      const token2612 = getContract({
+        address: "0x1012E55A1BB63F6Da5685A2Af479f0FdD9591157",
+        abi: wagmi2612Abi,
+        publicClient,
+        walletClient,
+      });
+
+
+      const tokenBalance = await token2612.read.balanceOf([address]);
+
+      const humanTokenBalance = formatEther(tokenBalance);
+
 			// Update values for address & balance state variable
       setAddress(address);
 			setBalance(balance);
+      setTokenBalance( tokenBalance );
     } catch (error) {
 			// Error handling
       alert(`Transaction failed: ${error}`);
@@ -35,7 +53,7 @@ export default function WalletButton() {
 
   return (
     <>
-      <Status address={address} balance={balance} />
+      <Status address={address} balance={balance} tokenBalance={tokenBalance} />
       <button className="px-8 py-2 rounded-md bg-[#1e2124] flex flex-row items-center justify-center border border-[#1e2124] hover:border hover:border-indigo-600 shadow-md shadow-indigo-500/10"
         onClick={handleClick}
       >
@@ -51,9 +69,11 @@ export default function WalletButton() {
 function Status({
   address,
   balance,
+  tokenBalance,
 }: {
   address: string | null;
   balance: BigInt;
+  tokenBalance: BigInt;
 }) {
   if (!address) {
     return (
@@ -68,7 +88,8 @@ function Status({
     <div className="flex items-center w-full">
       <div className="border bg-green-500 border-green-500 rounded-full w-1.5 h-1.5 mr-2"></div>
       <div className="text-xs md:text-xs">
-        {address} <br /> Balance: {balance.toString()}
+        {address} <br /> Eth Balance: {balance.toString()}
+        <br /> Token Balance: {tokenBalance.toString()}
       </div>
     </div>
   );

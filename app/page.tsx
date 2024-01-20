@@ -18,13 +18,7 @@ export default function Home() {
           <SendButton />
           <MintButton />
         </div>
-        <a
-          href="https://rareskills.io"
-          target="_blank"
-          className="text-white font-bold text-3xl hover:text-[#0044CC]"
-        >
-          Rareskills.io
-        </a>
+
       </div>
     </main>
   );
