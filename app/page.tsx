@@ -1,6 +1,7 @@
 import WalletButton from "./walletButton";
 import MintButton from "./mintButton";
 import SendButton from "./sendButton";
+import Deposit from "./deposit";
 
 export default function Home() {
   return (
@@ -13,8 +14,10 @@ export default function Home() {
         >
           Viem.sh
         </a>   
-        <div className="h-[300px] min-w-[150px] flex flex-col justify-between  backdrop-blur-2xl bg-[#290330]/30 rounded-lg mx-auto p-7 text-white border border-purple-950">
+        <div className="h-[500px] min-w-[150px] flex flex-col justify-between  backdrop-blur-2xl bg-[#290330]/30 rounded-lg mx-auto p-7 text-white border border-purple-950">
           <WalletButton />
+          <Deposit />
+
           <SendButton />
           <MintButton />
         </div>
