@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { formatEther, getContract, parseUnits, Hex, hexToNumber, pad, slice, toHex, TypedDataDomain} from "viem";
+import { formatEther, getContract, parseUnits, Address, Hex, Hash, hexToNumber, pad, slice, toHex, TypedDataDomain} from "viem";
 
 import { wagmi2612Abi } from "./abi_erc2612";
 import { tokenBankAbi } from "./abi_tokenbank";
@@ -11,31 +11,59 @@ import { ConnectWalletClient, ConnectPublicClient } from "./client";
 const erc2612Address = "0x1012E55A1BB63F6Da5685A2Af479f0FdD9591157"
 const tokenBankAddress = "0x7fBD1C8BEb374328d8FAB04a5F39579DB334566e"
 
+const walletClient = ConnectWalletClient();
+const publicClient = ConnectPublicClient();
+
 export default function Deposit() {
 
-  // Declare Client
-  const walletClient = ConnectWalletClient();
-  const publicClient = ConnectPublicClient();
+	const [address, setAddress] = useState<Address>();
+  const [txHash, setTxHash] = useState<Hash>()
 
-	const [address, setAddress] = useState<string | null>(null);
+  // const [balance, setBalance] = useState<BigInt>(BigInt(0));
+  const [tokenBalance, setTokenBalance] = useState<BigInt>(BigInt(0));
   const [allowanced, setAllowanced] = useState<BigInt>(BigInt(0));
   const [deposited, setDeposited] = useState<BigInt>(BigInt(0));
   
   const [token, setToken] = useState<any>(null);
   const [tokenBank, setTokenBank] = useState<any>(null);
   
+
   useEffect( () => {
-    getTokenContractInfo()
+    initContract();
+    refreshToken();
+    refreshDeposited();
+  }, [address])
 
-}, [])
+  useEffect(() => {
+    ;(async () => {
+      if (txHash) {
+        console.log("waitForHash:" + txHash);
+        await publicClient.waitForTransactionReceipt(
+          { hash: txHash }
+        )
+        
+        refreshToken();
+        refreshDeposited();
+      }
+    })()
+  }, [txHash])
 
 
-  const getTokenContractInfo = async () => {
+  const refreshToken = async () => {
+    
+    const tokenBalance = await token?.read.balanceOf([address]);
+    setTokenBalance( tokenBalance );
 
-    const [address] = await walletClient.getAddresses();
+    const allowanced = await token?.read.allowance([address, tokenBankAddress]);
+    setAllowanced(allowanced)
+  }
 
-    console.log(" address :" +  address);
-		
+  const refreshDeposited = async () => {
+    const deposited = await tokenBank?.read.deposited([address]);
+    setDeposited(deposited)
+  }
+
+  async function initContract() {
     const token = getContract({
       address: erc2612Address,
       abi: wagmi2612Abi,
@@ -50,24 +78,17 @@ export default function Deposit() {
       walletClient,
     });
 
-
-
     setToken(token);
-    setAddress(address);
     setTokenBank(tokenBank);
-
-    refreshAllowance();
-    refreshDeposited();
-  }   
-
-  const refreshAllowance = async () => {
-    const allowanced = await token?.read.allowance([address, tokenBankAddress]);
-    setAllowanced(allowanced)
   }
 
-  const refreshDeposited = async () => {
-    const deposited = await tokenBank?.read.deposited([address]);
-    setDeposited(deposited)
+  async function handleConnect() {
+      const [address] = await walletClient.requestAddresses();
+      setAddress(address);
+
+      // const balance = await publicClient.getBalance({ address });
+      // setBalance(balance);
+      
   }
 
 	// Function to Interact With Smart Contract
@@ -77,11 +98,7 @@ export default function Deposit() {
       const hash = await token.write.approve([tokenBankAddress, amount], {account: address});
       console.log(`approve hash: ${hash} `);
 
-      await publicClient.getTransactionReceipt({
-        hash: hash
-      })
-
-      refreshAllowance();
+      setTxHash(hash);
 
     } catch (error) {
       alert(`Transaction failed: ${error}`);
@@ -95,11 +112,7 @@ export default function Deposit() {
       const hash = await tokenBank.write.deposit([address, amount], {account: address})
       console.log(`deposit hash: ${hash} `);
 
-      await publicClient.getTransactionReceipt({
-        hash: hash
-      })
-
-      refreshDeposited();
+      setTxHash(hash)
 
     } catch (error) {
       alert(`Transaction failed: ${error}`);
@@ -107,18 +120,20 @@ export default function Deposit() {
   }
 
 
-
-
   async function handlePermitDeposit() {
 
-    const nonce = 1;
+    const nonce = await token?.read.nonces([address]);
+    console.log("nonce:" + nonce);
+
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 100_000);    
-    const amount = parseUnits('1', 18)  ;
+    const amount = parseUnits('1', 18);
+
+    const chainId = await publicClient.getChainId();
     
     const domainData : TypedDataDomain =  {
         name: 'ERC2612',
         version: '1',
-        chainId: 11155111,
+        chainId: chainId,
         verifyingContract: erc2612Address
     }
 
@@ -155,18 +170,31 @@ export default function Deposit() {
       slice(signature, 32, 64),
       slice(signature, 64, 65),
     ];
-    // return { r, s, v: hexToNumber(v) };
-
 
     const hash = await tokenBank.write.permitDeposit([address, amount, deadline, hexToNumber(v), r, s],   
       {account: address})
-  
+
+    console.log(`deposit hash: ${hash} `);
+
+    await publicClient.getTransactionReceipt({
+      hash: hash
+    })
+
+    refreshDeposited();
   }
 
 
   return (
     <>
-     <DepositInfo allowanced={ allowanced }  deposited={deposited} />
+     <Status address={address}  tokenBalance={tokenBalance} allowanced={ allowanced }  deposited={deposited} />
+      
+     <button className="px-8 py-2 rounded-md bg-[#1e2124] flex flex-row items-center justify-center border border-[#1e2124] hover:border hover:border-indigo-600 shadow-md shadow-indigo-500/10"
+        onClick={handleConnect}
+      >
+        <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" alt="MetaMask Fox" style={{ width: "25px", height: "25px" }} />
+        <h1 className="mx-auto">Connect Wallet</h1>
+      </button>
+
       <button
         className="py-2.5 px-2 rounded-md bg-[#1e2124] flex flex-row items-center justify-center border border-[#1e2124] hover:border hover:border-indigo-600 shadow-md shadow-indigo-500/10"
       >
@@ -185,24 +213,41 @@ export default function Deposit() {
         <h1 className="text-center" onClick={handlePermitDeposit}>Permit Deposit</h1>
       </button>
 
-
     </>
   );
 }
 
 
-function DepositInfo({
+function Status({
+  address,
+  tokenBalance,
   allowanced,
   deposited
 }: {
+  address: string | null;
+  tokenBalance: BigInt;
   allowanced: BigInt;
   deposited: BigInt;
 }) {
+
+  if (!address) {
+    return (
+      <div className="flex items-center">
+        <div className="border bg-red-600 border-red-600 rounded-full w-1.5 h-1.5 mr-2"></div>
+        <div>Disconnected</div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center w-full">
       <div className="border bg-green-500 border-green-500 rounded-full w-1.5 h-1.5 mr-2"></div>
       <div className="text-xs md:text-xs">
-       My Allowanced: {allowanced?.toString()}
+      {address}
+      <br />
+        My Token Balance: {tokenBalance?.toString()}
+      <br /> 
+        My Allowanced: {allowanced?.toString()}
         <br />
         My Deposit: {deposited?.toString()}
       </div>

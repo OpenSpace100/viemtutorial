@@ -43,7 +43,7 @@ export default function WalletButton() {
 
 			// Update values for address & balance state variable
       setAddress(address);
-			setBalance(balance);
+      setBalance(balance);
       setTokenBalance( tokenBalance );
     } catch (error) {
 			// Error handling

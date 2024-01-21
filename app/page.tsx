@@ -12,14 +12,10 @@ export default function Home() {
           target="_blank"
           className="text-white font-bold text-3xl hover:text-[#0044CC]"
         >
-          Viem.sh
+          TokenBank Demo with Viem.sh
         </a>   
         <div className="h-[500px] min-w-[150px] flex flex-col justify-between  backdrop-blur-2xl bg-[#290330]/30 rounded-lg mx-auto p-7 text-white border border-purple-950">
-          <WalletButton />
           <Deposit />
-
-          <SendButton />
-          <MintButton />
         </div>
 
       </div>
