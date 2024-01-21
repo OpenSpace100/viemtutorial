@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { formatEther, getContract, parseUnits   } from "viem";
+import { formatEther, getContract, parseUnits, Hex, hexToNumber, pad, slice, toHex, TypedDataDomain} from "viem";
 
 import { wagmi2612Abi } from "./abi_erc2612";
 import { tokenBankAbi } from "./abi_tokenbank";
@@ -26,8 +26,7 @@ export default function Deposit() {
   
   useEffect( () => {
     getTokenContractInfo()
-    refreshAllowance();
-    refreshDeposited();
+
 }, [])
 
 
@@ -56,6 +55,9 @@ export default function Deposit() {
     setToken(token);
     setAddress(address);
     setTokenBank(tokenBank);
+
+    refreshAllowance();
+    refreshDeposited();
   }   
 
   const refreshAllowance = async () => {
@@ -105,6 +107,63 @@ export default function Deposit() {
   }
 
 
+
+
+  async function handlePermitDeposit() {
+
+    const nonce = 1;
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + 100_000);    
+    const amount = parseUnits('1', 18)  ;
+    
+    const domainData : TypedDataDomain =  {
+        name: 'ERC2612',
+        version: '1',
+        chainId: 11155111,
+        verifyingContract: erc2612Address
+    }
+
+    const types = {
+        Permit: [
+          {name: "owner", type: "address"},
+          {name: "spender", type: "address"},
+          {name: "value", type: "uint256"},
+          {name: "nonce", type: "uint256"},
+          {name: "deadline", type: "uint256"}
+        ]
+    }
+
+    const message = {
+        owner: address,
+        spender: tokenBankAddress,
+        value: amount,
+        nonce,
+        deadline
+    }
+
+    const signature = await walletClient.signTypedData({
+      account: address,
+      domain: domainData,
+      types,
+      primaryType: 'Permit',
+      message: message,
+    })
+
+    console.log(signature);
+
+    const [r, s, v] = [
+      slice(signature, 0, 32),
+      slice(signature, 32, 64),
+      slice(signature, 64, 65),
+    ];
+    // return { r, s, v: hexToNumber(v) };
+
+
+    const hash = await tokenBank.write.permitDeposit([address, amount, deadline, hexToNumber(v), r, s],   
+      {account: address})
+  
+  }
+
+
   return (
     <>
      <DepositInfo allowanced={ allowanced }  deposited={deposited} />
@@ -119,6 +178,13 @@ export default function Deposit() {
       >
         <h1 className="text-center" onClick={handleDeposit}>Deposit</h1>
       </button>
+
+      <button
+        className="py-2.5 px-2 rounded-md bg-[#1e2124] flex flex-row items-center justify-center border border-[#1e2124] hover:border hover:border-indigo-600 shadow-md shadow-indigo-500/10"
+      >
+        <h1 className="text-center" onClick={handlePermitDeposit}>Permit Deposit</h1>
+      </button>
+
 
     </>
   );
@@ -138,7 +204,7 @@ function DepositInfo({
       <div className="text-xs md:text-xs">
        My Allowanced: {allowanced?.toString()}
         <br />
-        My Deposit: {deposited.toString()}
+        My Deposit: {deposited?.toString()}
       </div>
     </div>
   );
